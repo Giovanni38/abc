@@ -17,8 +17,7 @@ IF OBJECT_ID('dbo.application', 'U') IS NOT NULL DROP TABLE dbo.application;
 IF OBJECT_ID('dbo.langage_programmation', 'U') IS NOT NULL DROP TABLE dbo.langage_programmation;
 IF OBJECT_ID('dbo.type_dependance', 'U') IS NOT NULL DROP TABLE dbo.type_dependance;
 IF OBJECT_ID('dbo.etape_version', 'U') IS NOT NULL DROP TABLE dbo.etape_version;
-IF OBJECT_ID('dbo.statut_version', 'U') IS NOT NULL DROP TABLE dbo.statut_version;
-IF OBJECT_ID('dbo.statut_application', 'U') IS NOT NULL DROP TABLE dbo.statut_application;
+IF OBJECT_ID('dbo.statut', 'U') IS NOT NULL DROP TABLE dbo.statut;
 IF OBJECT_ID('dbo.role_contact', 'U') IS NOT NULL DROP TABLE dbo.role_contact;
 IF OBJECT_ID('dbo.contact', 'U') IS NOT NULL DROP TABLE dbo.contact;
 IF OBJECT_ID('dbo.fabricant', 'U') IS NOT NULL DROP TABLE dbo.fabricant;
@@ -132,29 +131,16 @@ GO
 CREATE UNIQUE INDEX UX_role_contact_code ON dbo.role_contact(code);
 GO
 
-CREATE TABLE dbo.statut_application (
+CREATE TABLE dbo.statut (
     id BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
     code NVARCHAR(50) NOT NULL,
     libelle NVARCHAR(150) NOT NULL,
-    est_actif_metier BIT NOT NULL CONSTRAINT DF_statut_application_est_actif_metier DEFAULT (1),
-    ordre_affichage INT NOT NULL CONSTRAINT DF_statut_application_ordre DEFAULT (0),
-    actif BIT NOT NULL CONSTRAINT DF_statut_application_actif DEFAULT (1)
+    ordre_affichage INT NOT NULL CONSTRAINT DF_statut_ordre DEFAULT (0),
+    actif BIT NOT NULL CONSTRAINT DF_statut_actif DEFAULT (1)
 );
 GO
 
-CREATE UNIQUE INDEX UX_statut_application_code ON dbo.statut_application(code);
-GO
-
-CREATE TABLE dbo.statut_version (
-    id BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
-    code NVARCHAR(50) NOT NULL,
-    libelle NVARCHAR(150) NOT NULL,
-    ordre_affichage INT NOT NULL CONSTRAINT DF_statut_version_ordre DEFAULT (0),
-    actif BIT NOT NULL CONSTRAINT DF_statut_version_actif DEFAULT (1)
-);
-GO
-
-CREATE UNIQUE INDEX UX_statut_version_code ON dbo.statut_version(code);
+CREATE UNIQUE INDEX UX_statut_code ON dbo.statut(code);
 GO
 
 CREATE TABLE dbo.etape_version (
@@ -230,7 +216,7 @@ CREATE TABLE dbo.application (
     code_solution NVARCHAR(50) NULL,
     libelle NVARCHAR(255) NOT NULL,
     description_fonctionnelle NVARCHAR(MAX) NULL,
-    statut_application_id BIGINT NOT NULL,
+    statut_id BIGINT NOT NULL,
     version_production_id BIGINT NULL,
     date_premiere_mep DATE NULL,
     date_derniere_mep DATE NULL,
@@ -245,8 +231,8 @@ CREATE TABLE dbo.application (
     date_modification DATETIME2(0) NOT NULL CONSTRAINT DF_application_date_modification DEFAULT (SYSDATETIME()),
     cree_par BIGINT NULL,
     modifie_par BIGINT NULL,
-    CONSTRAINT FK_application_statut_application
-        FOREIGN KEY (statut_application_id) REFERENCES dbo.statut_application(id),
+    CONSTRAINT FK_application_statut
+        FOREIGN KEY (statut_id) REFERENCES dbo.statut(id),
     CONSTRAINT FK_application_produit
         FOREIGN KEY (produit_id) REFERENCES dbo.produit(id),
     CONSTRAINT FK_application_pu_metier
@@ -264,7 +250,7 @@ GO
 
 CREATE UNIQUE INDEX UX_application_code_pic ON dbo.application(code_pic);
 CREATE INDEX IX_application_libelle ON dbo.application(libelle);
-CREATE INDEX IX_application_statut ON dbo.application(statut_application_id);
+CREATE INDEX IX_application_statut ON dbo.application(statut_id);
 GO
 
 CREATE TABLE dbo.version_application (
@@ -272,7 +258,7 @@ CREATE TABLE dbo.version_application (
     application_id BIGINT NOT NULL,
     numero_version NVARCHAR(100) NOT NULL,
     release_note NVARCHAR(MAX) NULL,
-    statut_version_id BIGINT NOT NULL,
+    statut_id BIGINT NOT NULL,
     etape_version_id BIGINT NULL,
     date_mise_a_disposition DATE NULL,
     date_livraison DATE NULL,
@@ -288,8 +274,8 @@ CREATE TABLE dbo.version_application (
     modifie_par BIGINT NULL,
     CONSTRAINT FK_version_application_application
         FOREIGN KEY (application_id) REFERENCES dbo.application(id),
-    CONSTRAINT FK_version_application_statut_version
-        FOREIGN KEY (statut_version_id) REFERENCES dbo.statut_version(id),
+    CONSTRAINT FK_version_application_statut
+        FOREIGN KEY (statut_id) REFERENCES dbo.statut(id),
     CONSTRAINT FK_version_application_etape_version
         FOREIGN KEY (etape_version_id) REFERENCES dbo.etape_version(id),
     CONSTRAINT FK_version_application_fabricant
@@ -303,7 +289,9 @@ GO
 
 CREATE UNIQUE INDEX UX_version_application_app_version
 ON dbo.version_application(application_id, numero_version);
-CREATE INDEX IX_version_application_statut ON dbo.version_application(statut_version_id);
+
+CREATE INDEX IX_version_application_statut
+ON dbo.version_application(statut_id);
 GO
 
 ALTER TABLE dbo.application
@@ -370,7 +358,7 @@ CREATE TABLE dbo.version_contact (
     date_creation DATETIME2(0) NOT NULL CONSTRAINT DF_version_contact_date_creation DEFAULT (SYSDATETIME()),
     CONSTRAINT FK_version_contact_version
         FOREIGN KEY (version_id) REFERENCES dbo.version_application(id),
-    CONSTRAINT FK_version_contact_contact
+        CONSTRAINT FK_version_contact_contact
         FOREIGN KEY (contact_id) REFERENCES dbo.contact(id),
     CONSTRAINT FK_version_contact_role_contact
         FOREIGN KEY (role_contact_id) REFERENCES dbo.role_contact(id)
@@ -459,20 +447,10 @@ INSERT INTO dbo.role_contact (code, libelle) VALUES
 ('REFERENT', 'Référent');
 GO
 
-INSERT INTO dbo.statut_application (code, libelle, est_actif_metier, ordre_affichage) VALUES
-('EN_PRODUCTION', 'En production', 1, 1),
-('EN_DEVELOPPEMENT', 'En développement', 1, 2),
-('EN_DECOMMISSIONNEMENT', 'En décommissionnement', 0, 3),
-('DECOMMISSIONNEE', 'Décommissionnée', 0, 4),
-('ARCHIVEE', 'Archivée', 0, 5);
-GO
-
-INSERT INTO dbo.statut_version (code, libelle, ordre_affichage) VALUES
-('BROUILLON', 'Brouillon', 1),
-('EN_COURS', 'En cours', 2),
-('VALIDEE', 'Validée', 3),
-('EN_PRODUCTION', 'En production', 4),
-('OBSOLETE', 'Obsolète', 5);
+INSERT INTO dbo.statut (code, libelle, ordre_affichage) VALUES
+('EN_DEV', 'En Développement', 1),
+('EN_PROD', 'En production', 2),
+('DECOM', 'Décommissionné', 3);
 GO
 
 INSERT INTO dbo.etape_version (code, libelle, ordre_affichage) VALUES
